@@ -11,6 +11,9 @@ integration.
 
 - `data/api_specs/*.yaml` — source of truth for each upstream API. Provide auth
   instructions, headers, schema fields, sample requests, and sample responses.
+- Includes directory-focused specs (e.g., `user_accounts.yaml`) that document
+  cursor/page-based pagination flows plus retry policies so you can script
+  full exports safely.
 - `src/rag` — lightweight Python package that:
   - loads the YAML specs,
   - expands them into semantically rich text chunks,
@@ -49,8 +52,9 @@ The ingestion flow automatically creates dedicated chunks for:
 
 - Overall service description and base URL
 - Authentication requirements (including secrets source)
-- Each operation's request contract (headers, params, body schema)
-- Each operation's response schema and status codes
+- Each operation's request contract (headers, params, body schema, pagination
+  knobs, retry expectations)
+- Each operation's response schema and status codes (including paging tokens)
 
 This ensures downstream consumers can retrieve both connection requirements and
 payload structure in one go.
@@ -60,7 +64,8 @@ payload structure in one go.
 - **Vector store**: TF‑IDF + cosine similarity (`scikit-learn`). Lightweight,
   deterministic, and easy to run locally without GPU dependencies.
 - **Document builder**: Guarantees that every spec emits consistent labeled
-  text, making the retrieved excerpts easy to reformat into prompts or runbooks.
+  text, including pagination + retry instructions, making the retrieved
+  excerpts easy to reformat into prompts or runbooks.
 - **RAG answer synthesis**: Produces a templated summary plus the raw retrieved
   chunks so you can forward them to an LLM, display them in tooling, or export
   as JSON.

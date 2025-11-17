@@ -85,6 +85,8 @@ class DocumentBuilder:
         lines.extend(self._format_params("Query params", request.get("query_params")))
         lines.extend(self._format_params("Headers", request.get("headers"), key_name="name"))
         lines.extend(self._format_schema("Request body", request.get("body_schema")))
+        lines.extend(self._format_pagination(op.get("pagination")))
+        lines.extend(self._format_retries(op.get("retries")))
 
         example = (request.get("example") or {}).get("curl") or request.get("example")
         if example:
@@ -158,4 +160,47 @@ class DocumentBuilder:
             description = field.get("description") or ""
             default = f" default={field.get('default')}" if field.get("default") is not None else ""
             lines.append(f"- {name} ({field_type}, {required_text}{default}): {description}")
+        return lines
+
+    def _format_pagination(self, pagination: Dict[str, Any] | None) -> List[str]:
+        if not pagination:
+            return []
+
+        lines = ["Pagination:"]
+        if pagination.get("strategy"):
+            lines.append(f"- strategy: {pagination['strategy']}")
+        if pagination.get("instructions"):
+            lines.append(f"- instructions: {pagination['instructions'].strip()}")
+        if pagination.get("completion_condition"):
+            lines.append(f"- completion condition: {pagination['completion_condition']}")
+        if pagination.get("request_params"):
+            lines.append("- request params:")
+            lines.extend(
+                f"  * {param.get('name')} (default={param.get('default', 'n/a')}): {param.get('description', '')}"
+                for param in pagination["request_params"]
+            )
+        if pagination.get("response_fields"):
+            lines.append("- response fields:")
+            lines.extend(
+                f"  * {field.get('field')} ({field.get('description', '')})"
+                for field in pagination["response_fields"]
+            )
+        return lines
+
+    def _format_retries(self, retries: Dict[str, Any] | None) -> List[str]:
+        if not retries:
+            return []
+
+        lines = ["Retry strategy:"]
+        if retries.get("policy"):
+            lines.append(f"- policy: {retries['policy']}")
+        if retries.get("max_attempts") is not None:
+            lines.append(f"- max attempts: {retries['max_attempts']}")
+        if retries.get("backoff_seconds"):
+            lines.append(f"- backoff: {retries['backoff_seconds']}")
+        if retries.get("retryable_status_codes"):
+            codes = ", ".join(str(code) for code in retries["retryable_status_codes"])
+            lines.append(f"- retryable status codes: {codes}")
+        if retries.get("instructions"):
+            lines.append(f"- instructions: {retries['instructions'].strip()}")
         return lines
