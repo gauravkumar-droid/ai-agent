@@ -1,0 +1,164 @@
+api_name: User & Account Directory API
+application: Workforce Directory
+aliases:
+  - directory
+  - user directory
+  - accounts directory
+service_description: >
+  Supports governance-compliant exports of workforce users and their linked
+  financial accounts. Designed for large data pulls with cursor-based paging and
+  resilient retry semantics.
+base_url: https://directory.example-enterprise.com/v1
+auth:
+  type: bearer_token
+  token_source: https://auth.example-enterprise.com/oauth/token
+  instructions: >
+    Use OAuth2 client credentials with scope directory.read. Tokens expire in
+    30 minutes; rotate proactively when fetching long-running exports.
+  headers:
+    - name: Authorization
+      format: Bearer <access_token>
+    - name: X-Org-Id
+      format: UUID of tenant
+operations:
+  - name: List Users
+    method: GET
+    path: /users
+    summary: Retrieve user directory snapshots with cursor pagination.
+    prerequisites:
+      - Org must be provisioned for directory exports.
+      - Provide X-Org-Id header to scope the tenant.
+    request:
+      query_params:
+        - name: page_size
+          type: integer
+          default: 500
+          description: Max 1000. Number of users returned per page.
+        - name: cursor
+          type: string
+          required: false
+          description: Continue from previous next_cursor response.
+        - name: updated_after
+          type: RFC3339 timestamp
+          required: false
+          description: Filter to users updated after timestamp.
+      headers:
+        - name: Accept
+          value: application/json
+        - name: X-Request-Id
+          description: Optional idempotency key for retries.
+    pagination:
+      strategy: cursor
+      instructions: >
+        Start without a cursor. Continue calling GET /users while next_cursor is
+        populated. Pass the last next_cursor value into the cursor query param to
+        fetch the next page.
+      completion_condition: next_cursor is null or empty.
+      request_params:
+        - name: cursor
+          default: null
+          description: Include from prior response to request next page.
+        - name: page_size
+          default: 500
+          description: Tune down if responses approach 5 MB payload limit.
+      response_fields:
+        - field: next_cursor
+          description: Cursor token to resume pagination.
+        - field: estimated_total
+          description: Optional count for completion estimation.
+    retries:
+      policy: exponential_backoff
+      max_attempts: 5
+      backoff_seconds: "min(2^attempt, 30)"
+      retryable_status_codes: [408, 429, 500, 502, 503]
+      instructions: >
+        Respect Retry-After when present. Replay the same cursor to avoid data
+        gaps. Abort and alert if max attempts exceeded.
+    response:
+      status_codes:
+        - code: 200
+          meaning: Page of users returned.
+        - code: 429
+          meaning: Rate limit. Retry with backoff.
+      body_schema:
+        - field: users
+          type: array
+          description: List of user objects (id, name, email, status, entitlements).
+        - field: next_cursor
+          type: string
+          description: Pass into next request to continue pagination.
+        - field: estimated_total
+          type: integer
+          description: May be null while export is streaming.
+        - field: request_id
+          type: string
+          description: Echoed request correlation id.
+  - name: List Accounts
+    method: GET
+    path: /accounts
+    summary: Fetch financial accounts joined to users with paging and retries.
+    prerequisites:
+      - Requires directory.accounts scope assigned to client.
+    request:
+      query_params:
+        - name: page
+          type: integer
+          default: 1
+          description: 1-indexed fallback pagination when cursors absent.
+        - name: page_size
+          type: integer
+          default: 200
+          description: Max 500.
+        - name: user_id
+          type: uuid
+          required: false
+          description: Filter accounts for a specific user.
+      headers:
+        - name: Accept
+          value: application/json
+        - name: Prefer
+          value: return=minimal
+    pagination:
+      strategy: hybrid
+      instructions: >
+        Accounts endpoint returns both page/page_size metadata and next_cursor
+        for large datasets. Prefer cursor when provided; otherwise increment page.
+      completion_condition: When next_cursor null AND current_page == total_pages.
+      request_params:
+        - name: next_cursor
+          default: null
+          description: Found inside response.pagination.next_cursor.
+        - name: page
+          default: 1
+          description: Increment only when next_cursor missing.
+      response_fields:
+        - field: pagination.next_cursor
+          description: Cursor for next chunk.
+        - field: pagination.current_page
+          description: Numeric page indicator.
+        - field: pagination.total_pages
+          description: Provided for planning.
+    retries:
+      policy: jittered_exponential
+      max_attempts: 4
+      backoff_seconds: "random_between(1, 2^attempt * 1.5)"
+      retryable_status_codes: [429, 500, 504]
+      instructions: >
+        Safely retry PUT/POST fetches because endpoint is GET-only and idempotent.
+        Capture response.request_id for observability.
+    response:
+      status_codes:
+        - code: 200
+          meaning: Accounts returned.
+        - code: 206
+          meaning: Partial content when page truncated; continue pagination.
+      body_schema:
+        - field: accounts
+          type: array
+          description: Account list including user link and balances.
+        - field: pagination
+          type: object
+          description: Contains next_cursor, current_page, total_pages.
+        - field: request_id
+          type: string
+          description: Propagate for retries/logging.

@@ -1,0 +1,118 @@
+api_name: Payments Service
+application: FinCore Payments Platform
+aliases:
+  - payments
+  - payments service
+  - fincore payments
+service_description: >
+  Handles card-not-present capture and settlement. Supports payment tokenization,
+  idempotent POST requests, and asynchronous settlement callbacks.
+base_url: https://api.example-payments.com/v1
+auth:
+  type: bearer_token
+  token_source: https://auth.example-payments.com/oauth/token
+  instructions: >
+    Use OAuth2 client-credentials flow. Request a token with scope
+    payments:create payments:read. Tokens expire every 50 minutes.
+  headers:
+    - name: Authorization
+      format: Bearer <access_token>
+operations:
+  - name: Create Payment
+    method: POST
+    path: /payments
+    summary: Initiate a payment authorization and capture.
+    prerequisites:
+      - Merchant account must be enabled for the region.
+      - Idempotency-Key header required for retries.
+    request:
+      headers:
+        - name: Content-Type
+          value: application/json
+        - name: Idempotency-Key
+          value: UUID v4 provided by client
+      body_schema:
+        - field: amount
+          type: integer
+          required: true
+          description: Amount in minor units (e.g., cents).
+        - field: currency
+          type: string
+          required: true
+          description: ISO-4217 currency code.
+        - field: payment_method
+          type: object
+          required: true
+          description: Tokenized payment method descriptor.
+        - field: capture
+          type: boolean
+          required: false
+          default: true
+          description: Whether to capture immediately.
+      example:
+        curl: |
+          curl -X POST https://api.example-payments.com/v1/payments \
+            -H "Authorization: Bearer <token>" \
+            -H "Content-Type: application/json" \
+            -H "Idempotency-Key: 5b4a5a50-0999-4fa6-b83e-911541d5a4c3" \
+            -d '{
+              "amount": 2599,
+              "currency": "USD",
+              "payment_method": {"token": "pm_123"},
+              "capture": true
+            }'
+    response:
+      status_codes:
+        - code: 201
+          meaning: Payment accepted
+        - code: 400
+          meaning: Validation error
+        - code: 409
+          meaning: Duplicate Idempotency-Key
+      body_schema:
+        - field: payment_id
+          type: string
+          description: Server-generated identifier.
+        - field: status
+          type: string
+          description: pending | succeeded | failed
+        - field: capture_result
+          type: object
+          description: Present when capture is processed.
+      example:
+        json: |
+          {
+            "payment_id": "pay_789",
+            "status": "succeeded",
+            "capture_result": {
+              "captured_at": "2024-10-08T12:45:29Z",
+              "amount": 2599
+            }
+          }
+  - name: Get Payment
+    method: GET
+    path: /payments/{payment_id}
+    summary: Retrieve the latest state of a payment.
+    request:
+      path_params:
+        - name: payment_id
+          type: string
+          required: true
+      headers:
+        - name: Authorization
+          value: Bearer <access_token>
+    response:
+      status_codes:
+        - code: 200
+          meaning: Payment found
+        - code: 404
+          meaning: Unknown payment_id
+      body_schema:
+        - field: payment_id
+          type: string
+        - field: status
+          type: string
+        - field: amount
+          type: integer
+        - field: currency
+          type: string

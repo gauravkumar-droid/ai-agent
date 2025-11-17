@@ -1,0 +1,137 @@
+api_name: Zendesk Support API
+application: Zendesk
+aliases:
+  - zendesk
+  - zendesk support
+  - zendesk tickets
+service_description: >
+  Provides programmatic access to Zendesk Support resources such as tickets,
+  users, and organizations. Useful for bulk exports, synchronization, and audit
+  automation.
+base_url: https://{subdomain}.zendesk.com
+auth:
+  type: basic
+  instructions: >
+    Use Basic Auth with the pattern user/token as the username and the generated
+    API token as the password. Example username: agent@example.com/token. Tokens
+    are created inside Zendesk Admin Center.
+  headers:
+    - name: Authorization
+      format: Basic base64(user/token:api_token)
+operations:
+  - name: List Tickets
+    method: GET
+    path: /api/v2/tickets.json
+    summary: Export tickets in chronological order with incremental cursor.
+    prerequisites:
+      - Requires read access to tickets and incremental export permissions.
+    request:
+      query_params:
+        - name: page[size]
+          type: integer
+          default: 100
+          description: Max tickets per page (limit 1000 for Enterprise).
+        - name: page[after]
+          type: string
+          description: Cursor token from previous response.meta.after_cursor.
+        - name: include
+          type: string
+          description: Comma separated expansions (e.g., users,groups).
+      headers:
+        - name: Accept
+          value: application/json
+    pagination:
+      strategy: cursor
+      instructions: >
+        Zendesk returns meta.has_more and meta.after_cursor. Continue requests
+        while has_more=true, passing meta.after_cursor into page[after].
+      completion_condition: meta.has_more == false.
+      request_params:
+        - name: page[after]
+          default: null
+          description: Use previous meta.after_cursor.
+      response_fields:
+        - field: meta.has_more
+          description: Indicates more pages to fetch.
+        - field: meta.after_cursor
+          description: Token for the next page.
+    retries:
+      policy: exponential_backoff
+      max_attempts: 4
+      backoff_seconds: "min(2^attempt, 60)"
+      retryable_status_codes: [429, 500, 503]
+      instructions: >
+        Zendesk enforces strict rate limits. Always honor Retry-After header and
+        reuse the same page[after] cursor when replaying.
+    response:
+      status_codes:
+        - code: 200
+          meaning: Page of tickets returned.
+        - code: 429
+          meaning: Rate limited; retry with backoff.
+      body_schema:
+        - field: tickets
+          type: array
+          description: Collection of ticket records with requester_id, assignee_id.
+        - field: meta
+          type: object
+          description: Contains cursor pagination metadata.
+        - field: links
+          type: object
+          description: Includes next and prev hyperlinks when available.
+  - name: List Users
+    method: GET
+    path: /api/v2/users.json
+    summary: Enumerate Zendesk users with offset pagination.
+    request:
+      query_params:
+        - name: per_page
+          type: integer
+          default: 100
+          description: Users per page (max 100).
+        - name: page
+          type: integer
+          default: 1
+          description: 1-indexed page counter.
+      headers:
+        - name: Accept
+          value: application/json
+    pagination:
+      strategy: offset
+      instructions: >
+        Increase the page parameter sequentially until the returned users array
+        is empty. Combine with per_page to control payload size.
+      completion_condition: len(users) == 0.
+      request_params:
+        - name: page
+          default: 1
+          description: Increment each loop.
+        - name: per_page
+          default: 100
+          description: Adjust for rate limits.
+      response_fields:
+        - field: next_page
+          description: Absolute URL to fetch the next page.
+        - field: previous_page
+          description: Absolute URL to the prior page.
+    retries:
+      policy: linear_backoff
+      max_attempts: 3
+      backoff_seconds: "attempt * 5"
+      retryable_status_codes: [429, 502, 503]
+      instructions: >
+        For offset pagination, replay the exact URL from next_page/previous_page
+        to avoid skipping records.
+    response:
+      status_codes:
+        - code: 200
+          meaning: Page of users returned.
+        - code: 401
+          meaning: Invalid credentials or token.
+      body_schema:
+        - field: users
+          type: array
+          description: user objects containing email, role, verified flags.
+        - field: next_page
+          type: string
+          description: URL for next page (null when finished).
