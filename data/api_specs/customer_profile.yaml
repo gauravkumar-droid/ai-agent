@@ -1,0 +1,78 @@
+api_name: Customer Profile API
+service_description: >
+  Exposes read/write operations for end-user demographic and contact details.
+  Used by CRM, marketing automation, and support tooling.
+base_url: https://api.example-customer.com/v2
+auth:
+  type: basic
+  instructions: >
+    Use HTTPS Basic Authentication with an integration user. Passwords rotate
+    monthly; retrieve from secret manager key customer_api_password.
+  headers:
+    - name: Authorization
+      format: Basic base64(username:password)
+operations:
+  - name: Get Profile
+    method: GET
+    path: /profiles/{profile_id}
+    summary: Fetch the canonical customer record by profile ID.
+    request:
+      path_params:
+        - name: profile_id
+          type: uuid
+          required: true
+      query_params:
+        - name: include_consent
+          type: boolean
+          default: false
+      headers:
+        - name: Accept
+          value: application/json
+    response:
+      status_codes:
+        - code: 200
+          meaning: Profile found
+        - code: 404
+          meaning: No record for profile_id
+      body_schema:
+        - field: profile_id
+          type: uuid
+        - field: name
+          type: object
+          description: Nested first, middle, last.
+        - field: emails
+          type: array
+          description: Verified emails with opt-in metadata.
+        - field: consent
+          type: object
+          description: Present only when include_consent=true.
+  - name: Update Profile
+    method: PATCH
+    path: /profiles/{profile_id}
+    summary: Patch selected fields in the profile document.
+    request:
+      headers:
+        - name: Content-Type
+          value: application/json
+      body_schema:
+        - field: op
+          type: string
+          required: true
+          description: JSON Patch op (replace, add, remove)
+        - field: path
+          type: string
+          required: true
+          description: JSON pointer to field.
+        - field: value
+          type: any
+          required: true
+          description: Replacement value.
+    response:
+      status_codes:
+        - code: 204
+          meaning: Update accepted, no body returned
+        - code: 409
+          meaning: Version conflict; re-fetch ETag
+      headers:
+        - name: ETag
+          description: Incremented version tag to use on next update.

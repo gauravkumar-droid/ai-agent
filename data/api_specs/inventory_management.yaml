@@ -1,0 +1,84 @@
+api_name: Inventory Management API
+service_description: >
+  Provides stock-level synchronization with fulfillment centers. Supports webhook
+  notifications for low inventory thresholds.
+base_url: https://inventory.example-ops.com/api
+auth:
+  type: api_key
+  instructions: >
+    Include the x-api-key header with the key provisioned in the vendor portal.
+    Keys are environment specific; staging keys start with "stg_".
+  headers:
+    - name: x-api-key
+      format: plain-text key
+operations:
+  - name: List SKUs
+    method: GET
+    path: /skus
+    summary: Returns paginated stock records.
+    request:
+      query_params:
+        - name: page
+          type: integer
+          default: 1
+        - name: page_size
+          type: integer
+          default: 100
+        - name: updated_after
+          type: RFC3339 timestamp
+          required: false
+      headers:
+        - name: Accept
+          value: application/json
+    response:
+      status_codes:
+        - code: 200
+          meaning: Page returned
+      body_schema:
+        - field: items
+          type: array
+          description: List of SKU objects (see sku schema).
+        - field: next_page
+          type: integer
+          description: Null when final page reached.
+  - name: Update Stock
+    method: PUT
+    path: /skus/{sku_id}/stock
+    summary: Replaces on-hand and reserved quantities.
+    prerequisites:
+      - Requires inventory.update scope assigned to API key.
+    request:
+      path_params:
+        - name: sku_id
+          type: string
+          required: true
+      headers:
+        - name: Content-Type
+          value: application/json
+      body_schema:
+        - field: on_hand
+          type: integer
+          required: true
+        - field: reserved
+          type: integer
+          required: true
+        - field: warehouse_id
+          type: string
+          required: true
+    response:
+      status_codes:
+        - code: 200
+          meaning: Stock replaced
+        - code: 403
+          meaning: Missing inventory.update scope
+        - code: 429
+          meaning: Rate limit exceeded
+      body_schema:
+        - field: sku_id
+          type: string
+        - field: on_hand
+          type: integer
+        - field: reserved
+          type: integer
+        - field: updated_at
+          type: timestamp
