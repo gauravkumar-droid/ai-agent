@@ -32,6 +32,10 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Return machine-readable JSON output",
     )
+    query_parser.add_argument(
+        "--api-name",
+        help="Restrict retrieval to a specific API/application (e.g., 'Zendesk Support API')",
+    )
     query_parser.set_defaults(func=run_query)
 
     return parser.parse_args()
@@ -45,11 +49,12 @@ def run_ingest(args: argparse.Namespace) -> None:
 
 def run_query(args: argparse.Namespace) -> None:
     engine = RAGEngine(spec_dir=args.spec_dir, store_path=args.store_path)
-    result = engine.query(args.question, k=args.k)
+    result = engine.query(args.question, k=args.k, api_name=args.api_name)
     if args.json:
         payload = {
             "answer": result.answer,
             "contexts": [ctx.__dict__ for ctx in result.contexts],
+            "api_filter": result.api_filter,
         }
         print(json.dumps(payload, indent=2))
         return

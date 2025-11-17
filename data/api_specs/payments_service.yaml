@@ -1,4 +1,9 @@
 api_name: Payments Service
+application: FinCore Payments Platform
+aliases:
+  - payments
+  - payments service
+  - fincore payments
 service_description: >
   Handles card-not-present capture and settlement. Supports payment tokenization,
   idempotent POST requests, and asynchronous settlement callbacks.

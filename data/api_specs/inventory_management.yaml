@@ -1,4 +1,9 @@
 api_name: Inventory Management API
+application: Fulfillment Ops Hub
+aliases:
+  - inventory
+  - inventory management
+  - fulfillment ops
 service_description: >
   Provides stock-level synchronization with fulfillment centers. Supports webhook
   notifications for low inventory thresholds.

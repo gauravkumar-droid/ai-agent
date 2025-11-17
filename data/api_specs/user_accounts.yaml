@@ -1,4 +1,9 @@
 api_name: User & Account Directory API
+application: Workforce Directory
+aliases:
+  - directory
+  - user directory
+  - accounts directory
 service_description: >
   Supports governance-compliant exports of workforce users and their linked
   financial accounts. Designed for large data pulls with cursor-based paging and

@@ -1,4 +1,9 @@
 api_name: Customer Profile API
+application: Customer 360 Platform
+aliases:
+  - customer profile
+  - crm profile
+  - customer 360
 service_description: >
   Exposes read/write operations for end-user demographic and contact details.
   Used by CRM, marketing automation, and support tooling.

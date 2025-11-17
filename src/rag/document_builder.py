@@ -40,8 +40,7 @@ class DocumentBuilder:
                 ],
             ]
         )
-        metadata = {"api_name": spec.get("api_name"), "section": "overview"}
-        return Document(text=text, metadata=metadata)
+        return Document(text=text, metadata=self._metadata(spec, section="overview"))
 
     def _auth_doc(self, spec: Dict[str, Any]) -> Document:
         auth = spec.get("auth", {})
@@ -65,8 +64,7 @@ class DocumentBuilder:
                 *(f"- {line}" for line in header_lines or ["- none provided"]),
             ]
         )
-        metadata = {"api_name": spec.get("api_name"), "section": "auth"}
-        return Document(text=text, metadata=metadata)
+        return Document(text=text, metadata=self._metadata(spec, section="auth"))
 
     def _operation_request_doc(self, spec: Dict[str, Any], op: Dict[str, Any]) -> Document:
         request = op.get("request", {})
@@ -93,12 +91,10 @@ class DocumentBuilder:
             lines.append("Example request:")
             lines.append(str(example).strip())
 
-        metadata = {
-            "api_name": spec.get("api_name"),
-            "section": "request",
-            "operation": op.get("name"),
-        }
-        return Document(text="\n".join(lines), metadata=metadata)
+        return Document(
+            text="\n".join(lines),
+            metadata=self._metadata(spec, section="request", operation=op.get("name")),
+        )
 
     def _operation_response_doc(self, spec: Dict[str, Any], op: Dict[str, Any]) -> Document:
         response = op.get("response", {})
@@ -124,12 +120,10 @@ class DocumentBuilder:
             lines.append("Example response:")
             lines.append(str(example).strip())
 
-        metadata = {
-            "api_name": spec.get("api_name"),
-            "section": "response",
-            "operation": op.get("name"),
-        }
-        return Document(text="\n".join(lines), metadata=metadata)
+        return Document(
+            text="\n".join(lines),
+            metadata=self._metadata(spec, section="response", operation=op.get("name")),
+        )
 
     def _format_params(
         self, title: str, params: Iterable[Dict[str, Any]] | None, key_name: str = "name"
@@ -161,6 +155,17 @@ class DocumentBuilder:
             default = f" default={field.get('default')}" if field.get("default") is not None else ""
             lines.append(f"- {name} ({field_type}, {required_text}{default}): {description}")
         return lines
+
+    def _metadata(self, spec: Dict[str, Any], section: str, operation: str | None = None) -> Dict[str, Any]:
+        aliases = spec.get("aliases") or []
+        application = spec.get("application") or spec.get("api_name")
+        return {
+            "api_name": spec.get("api_name"),
+            "application": application,
+            "section": section,
+            "operation": operation,
+            "aliases": aliases,
+        }
 
     def _format_pagination(self, pagination: Dict[str, Any] | None) -> List[str]:
         if not pagination:
